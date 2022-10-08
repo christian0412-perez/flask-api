@@ -1,72 +1,65 @@
-from flask import Flask, jsonify, request
-from flask_sqlalchemy import SQLAlchemy
-from flask_marshmallow import Marshmallow
+from email import message
+from flask import Flask, Response, jsonify, request
+from flask_pymongo import PyMongo
+from bson import ObjectId, json_util
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI']='mysql+pymysql://root@localhost/flaskmysql'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
-
-db = SQLAlchemy(app)
-ma = Marshmallow(app)
-
-class Task(db.Model):
-    id = db.Column(db.Integer,primary_key=True)
-    title = db.Column(db.String(70),unique=True)
-    description = db.Column(db.String(100))
-
-    def __init__(self,title,description):
-        self.title = title
-        self.description = description
-with app.app_context():
-    db.create_all()
-
-class TaskSchema(ma.Schema):
-    class Meta:
-        fields = ('id','title','description')
-
-task_schema = TaskSchema()
-tasks_schema = TaskSchema(many=True)
+app.config['MONGO_URI']='mongodb://localhost/flaskdb'
+mongo=PyMongo(app)
 
 @app.route('/tasks',methods=['POST'])
 def create_task():
     title = request.json['title']
     description = request.json['description']
-    new_task =Task(title,description)
-    db.session.add(new_task)
-    db.session.commit()
-    return task_schema.jsonify(new_task)
+    if title and description:
+        id = mongo.db.tasks.insert_one({
+            'title': title, 'description': description
+        })
+        response= {
+            'id':str(id),
+            'title': title, 'description': description
+        }
+        return response
+    
+    else:
+        return notFound()
 
 @app.route('/tasks',methods=['GET'])
 def get_tasks():
-    all_tasks = Task.query.all()
-    result = tasks_schema.dump(all_tasks)
-    return jsonify(result)
+    tasks = mongo.db.tasks.find()
+    response = json_util.dumps(tasks)
+    return Response(response,mimetype='application/json')
 
 @app.route('/tasks/<id>',methods=['GET'])
 def get_task(id):
-    task = Task.query.get(id)
-    return task_schema.jsonify(task)
-
-@app.route('/tasks/<id>',methods=['PUT'])
-def update_task(id):
-    task = Task.query.get(id)
-    title = request.json['title']
-    description = request.json['description']
-    task.title = title
-    task.description = description
-    db.session.commit()
-    return task_schema.jsonify(task)
+    task = mongo.db.tasks.find_one({'_id': ObjectId(id)})
+    response = json_util.dumps(task)
+    return Response(response,mimetype='application/json')
 
 @app.route('/tasks/<id>',methods=['DELETE'])
 def delete_task(id):
-    task = Task.query.get(id)
-    db.session.delete(task)
-    db.session.commit()
-    return task_schema.jsonify(task)
+    task = mongo.db.tasks.delete_one({'_id': ObjectId(id)})
+    response = {'message': 'user '+id+' deleted'}
+    return response
 
-@app.route('/',methods=['GET'])
-def index():
-    return jsonify({'message':'bienvenido a mi api'})
+@app.route('/tasks/<id>',methods=['PUT'])
+def update_task(id):
+
+    title = request.json['title']
+    description = request.json['description']
+    if title and description:
+        task = mongo.db.tasks.update_one({'_id': ObjectId(id)}, { '$set':{
+            'title': title, 'description': description
+        }})
+        response = {'message': 'user '+id+' updated'}
+        return response
+@app.errorhandler(404)
+def notFound(error=None):
+    response = jsonify({'message': 'resurce not found '+request.url,
+    'status': 404})
+    response.status_code=404
+
+    return response
 
 if __name__ == "__main__":
     app.run(debug=True)
