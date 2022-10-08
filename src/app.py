@@ -6,7 +6,6 @@ app = Flask(__name__)
 
 app.config['MONGO_URI']='mongodb+srv://christian:vaca234s@cluster0.0zvvssd.mongodb.net/?retryWrites=true&w=majority'
 mongo=PyMongo(app)
-db= mongo.tasks
 
 @app.route('/tasks',methods=['POST'])
 def create_task():
