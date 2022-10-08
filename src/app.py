@@ -2,9 +2,14 @@ from email import message
 from flask import Flask, Response, jsonify, request
 from flask_pymongo import PyMongo
 from bson import ObjectId, json_util
+from pymongo import MongoClient
 app = Flask(__name__)
 
 app.config['MONGO_URI']='mongodb+srv://christian:vaca234s@cluster0.0zvvssd.mongodb.net/?retryWrites=true&w=majority'
+client = MongoClient("mongodb+srv://christian:vaca234s@cluster0.0zvvssd.mongodb.net/?retryWrites=true&w=majority")
+db = client.get_database('tasks')
+records = db.tasks
+
 mongo=PyMongo(app)
 
 @app.route('/tasks',methods=['POST'])
@@ -12,7 +17,7 @@ def create_task():
     title = request.json['title']
     description = request.json['description']
     if title and description:
-        id = mongo.db.tasks.insert_one({
+        id = records.insert_one({
             'title': title, 'description': description
         })
         response= {
@@ -26,19 +31,19 @@ def create_task():
 
 @app.route('/tasks',methods=['GET'])
 def get_tasks():
-    tasks = mongo.db.tasks.find()
+    tasks = records.find()
     response = json_util.dumps(tasks)
     return Response(response,mimetype='application/json')
 
 @app.route('/tasks/<id>',methods=['GET'])
 def get_task(id):
-    task = mongo.db.tasks.find_one({'_id': ObjectId(id)})
+    task = records.find_one({'_id': ObjectId(id)})
     response = json_util.dumps(task)
     return Response(response,mimetype='application/json')
 
 @app.route('/tasks/<id>',methods=['DELETE'])
 def delete_task(id):
-    task = mongo.db.tasks.delete_one({'_id': ObjectId(id)})
+    task = records.delete_one({'_id': ObjectId(id)})
     response = {'message': 'user '+id+' deleted'}
     return response
 
@@ -48,7 +53,7 @@ def update_task(id):
     title = request.json['title']
     description = request.json['description']
     if title and description:
-        task = mongo.db.tasks.update_one({'_id': ObjectId(id)}, { '$set':{
+        task = records.update_one({'_id': ObjectId(id)}, { '$set':{
             'title': title, 'description': description
         }})
         response = {'message': 'user '+id+' updated'}
